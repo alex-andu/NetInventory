@@ -32,6 +32,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,20 +57,31 @@ fun EquipmentListScreen(
     val count by vm.count.collectAsState()
     val scope = rememberCoroutineScope()
 
+    // ZXing embedded poate triggera callback-ul de doua ori in Compose;
+    // flagul garanteaza ca navigarea se face o singura data per scanare.
+    val isNavigating = remember { mutableStateOf(false) }
+
     val scanLauncher = rememberLauncherForActivityResult(ScanContract()) { result ->
         val contents = result.contents
-        if (contents != null) {
+        if (contents != null && !isNavigating.value) {
+            isNavigating.value = true
             scope.launch {
                 val existing = vm.findById(contents)
                 if (existing != null) onOpenEquipment(contents) else onAddNew(contents)
+                // reset dupa navigare, astfel incat urmatoarea scanare sa functioneze
+                isNavigating.value = false
             }
+        } else if (contents == null) {
+            // scanare anulata - reseteaza flagul
+            isNavigating.value = false
         }
     }
 
     fun launchScan() {
+        isNavigating.value = false  // reset la fiecare scanare noua
         val options = ScanOptions().apply {
             setDesiredBarcodeFormats(ScanOptions.QR_CODE)
-            setPrompt("Scanează eticheta QR a echipamentului")
+            setPrompt("Scaneaza eticheta QR a echipamentului")
             setBeepEnabled(true)
             setOrientationLocked(false)
         }
@@ -81,7 +94,7 @@ fun EquipmentListScreen(
                 Column {
                     Text("NetInventory")
                     Text(
-                        "$count echipamente în inventar",
+                        "$count echipamente in inventar",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -90,7 +103,7 @@ fun EquipmentListScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { onAddNew(null) }) {
-                Icon(Icons.Filled.Add, contentDescription = "Adaugă echipament")
+                Icon(Icons.Filled.Add, contentDescription = "Adauga echipament")
             }
         }
     ) { padding ->
@@ -109,7 +122,7 @@ fun EquipmentListScreen(
             ) {
                 Icon(Icons.Filled.QrCodeScanner, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
-                Text("Scanează cod QR", fontWeight = FontWeight.SemiBold)
+                Text("Scaneaza cod QR", fontWeight = FontWeight.SemiBold)
             }
 
             Spacer(Modifier.height(12.dp))
@@ -120,7 +133,7 @@ fun EquipmentListScreen(
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-                placeholder = { Text("Caută după nume, model, IP, rack…") }
+                placeholder = { Text("Cauta dupa nume, model, IP, rack...") }
             )
 
             Spacer(Modifier.height(8.dp))
@@ -128,7 +141,7 @@ fun EquipmentListScreen(
             if (items.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
-                        if (query.isBlank()) "Niciun echipament. Apasă + pentru a adăuga."
+                        if (query.isBlank()) "Niciun echipament. Apasa + pentru a adauga."
                         else "Niciun rezultat pentru \"$query\".",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
